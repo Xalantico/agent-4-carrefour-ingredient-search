@@ -139,14 +139,32 @@ async def process_message(data: ChatMessage) -> None:
         conversation_manager.add_message(data.thread_id, "user", data.message)
         thread_history = conversation_manager.get_history(data.thread_id)
         
+        # Language detection (simple heuristic) and localized strings
+        msg_lower = (data.message or "").strip().lower()
+        is_spanish = bool(re.search(r"\b(hola|quiero|hacer|tortilla|ingrediente|ingredientes|patata|por favor|gracias)\b", msg_lower))
+        lang = 'es' if is_spanish else 'en'
+
+        texts = {
+            'processing': "🔎 Analizando tu mensaje...\n" if lang == 'es' else "🔎 Analyzing your message...\n",
+            'greet': "👋 Hola, dime qué plato quieres preparar (por ejemplo: 'tortilla de patata')." if lang == 'es' else "👋 Hi, tell me what dish you want to make (e.g., 'Spanish omelette').",
+            'no_ingredients': "No pude identificar ingredientes. Por favor, especifica el plato con más detalle." if lang == 'es' else "I couldn't identify ingredients. Please specify the dish with more detail.",
+            'ingredients_header': "🍳 Ingredientes detectados:\n" if lang == 'es' else "🍳 Detected ingredients:\n",
+            'saved': "\n🗂️ Guardados {n} ingredientes en ingredients.txt\n\n" if lang == 'es' else "\n🗂️ Saved {n} ingredients to ingredients.txt\n\n",
+            'searching': "🔎 Buscando en Carrefour: {ing}\n" if lang == 'es' else "🔎 Searching on Carrefour: {ing}\n",
+            'link_line': "➡️ {ing}: {link}\n",
+            'not_found': "➡️ {ing}: No encontrado\n" if lang == 'es' else "➡️ {ing}: Not found\n",
+            'results_header': "🛒 Enlaces de Carrefour por ingrediente:" if lang == 'es' else "🛒 Carrefour links per ingredient:",
+            'final_header': "🍳 Ingredientes detectados:" if lang == 'es' else "🍳 Detected ingredients:",
+        }
+
         # Stream a quick processing indicator
-        lexia.stream_chunk(data, "🔎 Analizando tu mensaje...\n")
+        lexia.stream_chunk(data, texts['processing'])
 
         # Greetings flow
-        msg_lower = (data.message or "").strip().lower()
-        greetings = {"hi", "hello", "hola", "hey", "buenas", "buenos días", "buenas tardes", "buenas noches"}
-        if msg_lower in greetings:
-            greet_reply = "👋 Hola, dime qué plato quieres preparar (por ejemplo: 'tortilla de patata')."
+        es_greetings = {"hola", "buenas", "buenos días", "buenas tardes", "buenas noches"}
+        en_greetings = {"hi", "hello", "hey"}
+        if msg_lower in (es_greetings | en_greetings):
+            greet_reply = texts['greet']
             lexia.stream_chunk(data, greet_reply)
             lexia.complete_response(data, greet_reply)
             return
@@ -155,8 +173,8 @@ async def process_message(data: ChatMessage) -> None:
         sys_prompt = (
             "You are a culinary assistant. When the user mentions a dish, "
             "extract a concise list of core grocery ingredients needed to make it. "
-            "Respond ONLY with a valid JSON array of strings in Spanish where appropriate, "
-            "no extra text. Keep common items simple (e.g., 'huevos', 'patatas', 'cebolla', 'aceite de oliva', 'sal')."
+            "Respond ONLY with a valid JSON array of strings in the same language as the user, "
+            "no extra text. Keep common items simple (e.g., 'huevos'/'eggs', 'patatas'/'potatoes', 'cebolla'/'onion', 'aceite de oliva'/'olive oil', 'sal'/'salt')."
         )
         messages = [
             {"role": "system", "content": sys_prompt},
@@ -201,7 +219,7 @@ async def process_message(data: ChatMessage) -> None:
                 normalized.append(name)
 
         if not normalized:
-            msg = "No pude identificar ingredientes. Por favor, especifica el plato con más detalle."
+            msg = texts['no_ingredients']
             lexia.stream_chunk(data, msg)
             lexia.complete_response(data, msg)
             return
@@ -211,30 +229,30 @@ async def process_message(data: ChatMessage) -> None:
         with open(target_path, "w", encoding="utf-8") as f:
             for ing in normalized:
                 f.write(ing + "\n")
-        lexia.stream_chunk(data, "🍳 Ingredientes detectados:\n")
+        lexia.stream_chunk(data, texts['ingredients_header'])
         for ing in normalized:
             lexia.stream_chunk(data, f"- {ing}\n")
-        lexia.stream_chunk(data, f"\n🗂️ Guardados {len(normalized)} ingredientes en ingredients.txt\n\n")
+        lexia.stream_chunk(data, texts['saved'].format(n=len(normalized)))
 
         # Search Carrefour for each ingredient and stream result
-        results_lines = ["🛒 Enlaces de Carrefour por ingrediente:"]
+        results_lines = [texts['results_header']]
         for ing in normalized:
             query = f"{ing} site:carrefour.es"
             try:
-                lexia.stream_chunk(data, f"🔎 Buscando en Carrefour: {ing}\n")
+                lexia.stream_chunk(data, texts['searching'].format(ing=ing))
                 link = serper_first_link(query, data.variables)
             except Exception as e:
                 logger.error(f"Serper error for '{ing}': {e}")
                 link = None
             if link:
-                lexia.stream_chunk(data, f"➡️ { ing }: { link }\n")
+                lexia.stream_chunk(data, texts['link_line'].format(ing=ing, link=link))
                 results_lines.append(f"- {ing}: {link}")
             else:
-                lexia.stream_chunk(data, f"➡️ {ing}: No encontrado\n")
-                results_lines.append(f"- {ing}: No encontrado")
+                lexia.stream_chunk(data, texts['not_found'].format(ing=ing))
+                results_lines.append(f"- {ing}: {'No encontrado' if lang == 'es' else 'Not found'}")
 
         final_response = "\n".join([
-            "🍳 Ingredientes detectados:",
+            texts['final_header'],
             "- " + "\n- ".join(normalized),
             "",
             "\n".join(results_lines)
