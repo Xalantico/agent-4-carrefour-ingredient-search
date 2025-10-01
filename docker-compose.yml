@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  menufood-agent:
+  ingredientes-agent:
     build: .
-    container_name: menufood-agent
+    container_name: ingredientes-agent
     ports:
       - "8002:8002"
     environment:
@@ -18,8 +18,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - menufood-network
+      - ingredientes-network
 
 networks:
-  menufood-network:
+  ingredientes-network:
     driver: bridge
