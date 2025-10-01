@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  menufood-agent:
+    build: .
+    container_name: menufood-agent
+    ports:
+      - "8002:8002"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./menu.txt:/app/menu.txt  # Mount menu.txt for persistence
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - menufood-network
+
+networks:
+  menufood-network:
+    driver: bridge

@@ -1,0 +1,15 @@
+# Lexia Starter Kit Dependencies
+# ==============================
+
+# Core Lexia package
+lexia>=1.2.1
+
+# OpenAI API client
+openai>=1.0.0
+
+# Web framework (required for Lexia web functionality)
+fastapi>=0.100.0
+uvicorn>=0.20.0
+
+# Google search functionality via Serper API
+requests>=2.25.0
