@@ -1,14 +1,23 @@
-# Lexia AI Agent Starter Kit
+# Carrefour Ingredient Shopper Agent (Lexia)
 
-A clean, minimal example showing how to build AI agents that integrate with the Lexia platform. This starter kit demonstrates best practices for creating AI agents with proper memory management, streaming responses, and file processing capabilities.
+An AI agent that, given a dish name (e.g., "tortilla de patata"), will:
+
+1. Extract the core ingredients using an LLM
+2. Save them to `/tmp/ingredients.txt`
+3. Search each ingredient on Carrefour (`site:carrefour.es`) via Serper
+4. Stream back one Carrefour link per ingredient
+
+It streams every step (processing, ingredients, file save, searches, links) and replies in the user's language.
 
 ## ✨ Features
 
 - **Clean Architecture**: Well-structured, maintainable code with clear separation of concerns
 - **Memory Management**: Built-in conversation history and thread management
-- **File Processing**: Support for image analysis
-- **Streaming Responses**: Real-time response streaming via Lexia's infrastructure
-- **Google Search**: Built-in Google search functionality with Serper API
+- **Ingredient Extraction**: Uses OpenAI to extract ingredients for a user-given dish
+- **Carrefour Search**: Uses Serper to find Carrefour links for each ingredient (`site:carrefour.es`)
+- **Streaming Responses**: Streams progress and results in real time (ingredients, saving, per-ingredient links)
+- **Language-Aware**: Detects user language (ES/EN heuristic) and responds accordingly
+- **File Output**: Saves ingredients to `/tmp/ingredients.txt`
 - **Variables Helper**: Modern Variables class for clean API key and configuration management
 - **Error Handling**: Robust error handling and logging throughout
 - **Standard Endpoints**: Inherited endpoints from Lexia package for consistency
@@ -17,8 +26,9 @@ A clean, minimal example showing how to build AI agents that integrate with the 
 
 ### Prerequisites
 
-- Python 3.8+
-- OpenAI API key
+- Python 3.10+
+- OpenAI API key (`OPENAI_API_KEY`)
+- Serper API key (`SERPER_API_KEY`)
 - Access to Lexia platform
 
 ### Installation
@@ -42,7 +52,7 @@ A clean, minimal example showing how to build AI agents that integrate with the 
    pip install -r requirements.txt
    ```
 
-4. **Run the starter kit**
+4. **Run the agent**
    ```bash
    python main.py
    ```
@@ -72,12 +82,23 @@ A clean, minimal example showing how to build AI agents that integrate with the 
 
 The server will start on `http://localhost:8002`
 
-## 📚 API Documentation
+## 📚 API & Endpoints
 
 Once running, you can access:
 
-- **Health Check**: `http://localhost:8002/api/v1/health`
-- **Chat Endpoint**: `http://localhost:8002/api/v1/send_message`
+- Health Check: `http://localhost:8002/api/v1/health`
+- Chat Endpoint: `http://localhost:8002/api/v1/send_message`
+- Docs: `http://localhost:8002/docs`
+
+Request body (example):
+
+```json
+{
+  "thread_id": "test",
+  "message": "I want to make tortilla de patata",
+  "model": "gpt-4o-mini"
+}
+```
 
 ## 🏗️ Architecture
 
@@ -105,10 +126,22 @@ Once running, you can access:
 
 ### Key Modules
 
-- **`main.py`**: Main application entry point with AI processing logic
+- **`main.py`**: Main application entry point with the ingredient → Carrefour streaming workflow
 - **`memory/`**: Conversation history and thread management
 - **`agent_utils.py`**: Utility functions for OpenAI integration
-- **`search_handler.py`**: Google search functionality with Serper API
+- **`search_handler.py`**: Serper utilities (e.g., `serper_first_link`) and optional Google search helpers
+
+## 🍳 How It Works
+
+1. User sends a dish name (e.g., "tortilla de patata").
+2. The agent asks OpenAI for a JSON array of core ingredients (in the user's language).
+3. The agent streams the detected ingredients and saves them to `/tmp/ingredients.txt`.
+4. For each ingredient, the agent streams a Carrefour search line and the first result link from Serper (or "Not found").
+5. A final completion message is sent when done.
+
+Notes:
+- Language is auto-detected with a small heuristic; messages are localized to ES/EN.
+- Make sure `OPENAI_API_KEY` and `SERPER_API_KEY` are configured in the agent variables.
 
 ## 🔧 Customization
 
@@ -123,12 +156,7 @@ Edit the `process_message()` function in `main.py` to customize:
 
 ### Add New Capabilities
 
-The starter kit provides a clean foundation for adding new AI capabilities. You can extend the `process_message()` function to add:
-
-- Custom AI model integrations
-- Specialized image processing
-- External API integrations
-- Custom response formatting
+Extend `process_message()` to add behaviors, or expand `search_handler.py` with more search helpers (e.g., different retailers, price filters).
 
 ### Memory Management
 
@@ -138,13 +166,11 @@ Customize conversation storage in the `memory/` module:
 - Implement persistent storage (database, files)
 - Add conversation analytics and insights
 
-## 📁 File Processing
+## 📁 Files Produced
 
-The starter kit supports:
+- `/tmp/ingredients.txt`: One ingredient per line (overwritten each run)
 
-- **Image Analysis**: Vision capabilities for image-based queries
-
-## 🔑 Configuration Management
+## 🔑 Configuration
 
 ### Variables Helper Class
 
@@ -167,6 +193,11 @@ anthropic_key = vars.get_anthropic_key()
 groq_key = vars.get_groq_key()
 ```
 
+### Required Variables
+
+- `OPENAI_API_KEY`: OpenAI API key
+- `SERPER_API_KEY`: Serper.dev API key
+
 ### Benefits of Variables Helper
 
 - **Clean API**: Object-oriented approach instead of utility functions
@@ -174,42 +205,15 @@ groq_key = vars.get_groq_key()
 - **Flexible**: Easy to change variable names without code changes
 - **Consistent**: Same pattern across all Lexia integrations
 
-## 🔍 Google Search Functionality
+## 🔍 Serper Carrefour Search
 
-The starter kit includes Google search capabilities using the Serper API, allowing your AI agent to access current information from the web.
+We use Serper's web search to fetch Carrefour results with `site:carrefour.es`.
 
-### Setup
+Setup:
+- Get an API key from `https://serper.dev`
+- Set `SERPER_API_KEY` in agent variables
 
-1. **Get a Serper API Key**
-   - Visit [Serper.dev](https://serper.dev) and sign up for a free account
-   - Get your API key from the dashboard
-
-2. **Configure the Agent**
-   - In the Lexia platform, go to your agent settings
-   - Add `SERPER_API_KEY` as a variable with your API key
-
-### How It Works
-
-The AI agent can automatically search Google when users ask questions that require current information:
-
-```python
-# Example usage - the AI will automatically call this function when needed
-user_query = "What's the latest news about AI developments?"
-# The agent will search Google and provide current results
-```
-
-### Features
-
-- **Automatic Search**: The AI decides when to search based on user queries
-- **Real-time Results**: Access to current web information
-- **Formatted Output**: Clean, readable search results with links
-- **Error Handling**: Graceful fallback if search fails
-- **Configurable**: Adjust number of results (1-10)
-
-### Search Function Parameters
-
-- `query`: The search query string
-- `num_results`: Number of results to return (default: 5, max: 10)
+The helper `serper_first_link(query, variables)` returns the first organic result link.
 
 ## 🧪 Testing
 
@@ -256,8 +260,8 @@ curl -X POST "https://your-ngrok-url.ngrok-free.app/api/v1/send_message" \
      -H "Content-Type: application/json" \
      -d '{
        "thread_id": "test_thread",
-       "message": "Hello, how are you?",
-       "model": "gpt-3.5-turbo"
+       "message": "I want to make tortilla de patata",
+       "model": "gpt-4o-mini"
      }'
 ```
 
@@ -272,6 +276,7 @@ curl -X POST "https://your-ngrok-url.ngrok-free.app/api/v1/send_message" \
    - "Sorry, the OpenAI API key is missing or empty. From menu right go to admin mode, then agents and edit the agent in last section you can set the openai key."
    - This guides users to the correct location in the Lexia platform to configure their API key
 3. **Port Conflicts**: Change the port in `main.py` if 8002 is already in use
+4. **No Links Found**: Ensure `SERPER_API_KEY` is set and the query includes `site:carrefour.es`
 4. **Variables Not Found**: Use the Variables helper class to access configuration values from Lexia requests
 
 ### Debug Mode
@@ -285,7 +290,7 @@ logging.basicConfig(level=logging.DEBUG)
 ## 📖 Code Structure
 
 ```
-lexia-starter-kit/
+project/
 ├── main.py                 # Main application entry point
 ├── requirements.txt        # Python dependencies
 ├── README.md              # This file
@@ -298,7 +303,7 @@ lexia-starter-kit/
 │   ├── __init__.py
 │   └── conversation_manager.py
 ├── agent_utils.py         # AI agent utilities
-└── search_handler.py      # Google search functionality
+└── search_handler.py      # Serper helpers (e.g., first link on Carrefour)
 ```
 
 ## 🤝 Contributing
